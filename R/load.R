@@ -42,11 +42,11 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
     my_eva_time = unique_T2
     if(get_DE){
       boot_DE_mat = matrix(0, boot_times, length(my_eva_time))
-      Q_stat_DE = rep(0, boot_times)
+      # Q_stat_DE = rep(0, boot_times)
     }
     if(get_IE){
       boot_IE_mat = matrix(0, boot_times, length(my_eva_time))
-      Q_stat_IE = rep(0, boot_times)
+      # Q_stat_IE = rep(0, boot_times)
     }
 
     if(num_of_cores > 1){
