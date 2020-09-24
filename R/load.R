@@ -87,11 +87,11 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
       pracma::fprintf('\n')
       for(i in 1:boot_times){
         if(get_DE){
-          Q_stat_DE[i] = boot_effect[[i]]$DE$Q_stat
+          # Q_stat_DE[i] = boot_effect[[i]]$DE$Q_stat
           boot_DE_mat[i, ] = my_eva_fun(list(boot_effect[[i]]$DE$effect, boot_effect[[i]]$DE$time), my_eva_time)
         }
         if(get_IE){
-          Q_stat_IE[i] = boot_effect[[i]]$IE$Q_stat
+          # Q_stat_IE[i] = boot_effect[[i]]$IE$Q_stat
           boot_IE_mat[i, ] = my_eva_fun(list(boot_effect[[i]]$IE$effect, boot_effect[[i]]$IE$time), my_eva_time)
         }
       }
@@ -125,11 +125,11 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
 
         boot_effect = estimate_effect(boot_df, effect, intervention, boot_cal_level, sen_ana = FALSE, get_variance = NULL, boot_times = 0, timer = FALSE, num_of_cores = FALSE, unique_T2, b0_time, b1_time, variance_method, threshold = 1e-15)
         if(get_DE){
-          Q_stat_DE[i] = boot_effect$DE$Q_stat
+          # Q_stat_DE[i] = boot_effect$DE$Q_stat
           boot_DE_mat[i, ] = my_eva_fun(list(boot_effect$DE$effect, boot_effect$DE$time), my_eva_time)
         }
         if(get_IE){
-          Q_stat_IE[i] = boot_effect$IE$Q_stat
+          # Q_stat_IE[i] = boot_effect$IE$Q_stat
           boot_IE_mat[i, ] = my_eva_fun(list(boot_effect$IE$effect, boot_effect$IE$time), my_eva_time)
         }
 
@@ -157,6 +157,81 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
   })
   }
   return(result)
+}
+
+simulation = function(sample_size, hypo, simulation_type){
+
+}
+
+## simulation
+generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, myseed = 1){
+  df_all = vector(mode = 'list', length = repeat_size)
+  set.seed(myseed)
+  observed = 0
+  alpha1Z = 0.25 * (hypo == 'alter')
+  alpha2Z = 0.25 * (hypo == 'alter')
+  intersection = -1.5
+
+  alphaX = 1 * confounder
+  X = c(rep(0, sample_size/2), rep(1, sample_size/2)) * confounder
+  Z = ((X + rnorm(sample_size)) > 0.5) + 1
+  # Z = X + rnorm(sample_size)
+  for(counter in 1:repeat_size){
+    set.seed(counter + myseed)
+
+    T1 = rweibull(sample_size, scale = exp(intersection + alpha1Z * Z + alphaX * X), shape = 1)
+    T2 = 0.7 * T1 + 0.5 * rweibull(sample_size, scale = exp(alpha2Z * Z + alphaX * X), shape = 1)
+    C = rweibull(sample_size, scale = 2, shape = 5)
+
+    d2 = T2 < C
+    T2 = pmin(T2, C)
+    d1 = T1 < T2
+    T1 = pmin(T1, T2)
+
+    observed = observed + sum(d2)
+    if(calibration){df_all[[counter]] = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z, X = X)}
+    if(!calibration){df_all[[counter]] = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z)}
+  }
+  observed = observed/(sample_size * repeat_size)
+  # fprintf('%.1f%% of subjects are censored.\n', (1 - observed) * 100)
+  return(df_all)
+}
+alternative_z_1_2 = function(hypo, effect, confounder, intervention){
+  tstart = 0
+  tend = 5
+  t = seq(tstart, tend, by = 1e-3)
+  diff_t = t[2] - t[1]
+  alpha1Z = 0.25 * (hypo == 'alter')
+  alpha2Z = 0.25 * (hypo == 'alter')
+  alphaX = 1 * confounder * 0.5
+  intersection = -1.5
+
+  #### (2, 2)
+  z_a = intervention[1]
+  z_b = ifelse(effect == 'DE', intervention[2], intervention[1])
+  a1zb = exp(intersection + alpha1Z * z_b + alphaX)
+  ca2zb = 0.5 * exp(alpha2Z * z_b + alphaX)
+  ca2za = 0.5 * exp(alpha2Z * z_a + alphaX)
+  w0_numerator = exp(-t / a1zb)
+  w0_denominator = 1/(a1zb - ca2zb) * (a1zb * exp(-t / a1zb) - ca2zb * exp(-t / ca2zb))
+  w1 = 1 - w0_numerator/w0_denominator
+  case1 = cumsum(w1) * diff_t / ca2za
+
+  #### (2, 1)
+  z_a = ifelse(effect == 'DE', intervention[2], intervention[1])
+  z_b = intervention[2]
+  a1zb = exp(intersection + alpha1Z * z_b + alphaX)
+  ca2zb = 0.5 * exp(alpha2Z * z_b + alphaX)
+  ca2za = 0.5 * exp(alpha2Z * z_a + alphaX)
+  w0_numerator = exp(-t / a1zb)
+  w0_denominator = 1/(a1zb - ca2zb) * (a1zb * exp(-t / a1zb) - ca2zb * exp(-t / ca2zb))
+  w1 = 1 - w0_numerator/w0_denominator
+  case2 = cumsum(w1) * diff_t / ca2za
+
+  #### (2, 2) - (2, 1)
+  cumhaz = data.frame(hazard = case1 - case2, time = t)
+
+  return(cumhaz)
 }
 
 ## data related
@@ -1246,43 +1321,85 @@ estimate_effect = function(df, effect, intervention, cal_level, sen_ana, get_var
 }
 
 ## plot function
+plot_poly = function(y1, y2, x, color, density = NULL, angle = NULL){
+  yy1 = c(rep(y1, 2)); yy1 = yy1[1:(length(yy1) - 1)]
+  yy2 = c(rep(y2, 2)); yy2 = rev(yy2[1:(length(yy2)) - 1])
+  xx = rep(x, 2); xx = xx[2:length(xx)]
+  polygon(y = c(yy1, yy2), x = c(xx, rev(xx)), density = density, col = adjustcolor(color, alpha.f = 0.3), border = color, angle = angle)
+}
 plot_CHH2020 = function(result, my_eva_time){
-  if(!is.null(result$DE)){
-    see_index = 1:max(which(result$converged_alpha$converged))
-    time_axis = result$DE$time/1
+  width = 250
+  height = 250
 
-    xlim = c(0, max(result$DE$time[see_index]/1))
-    ylim = c(min(result$DE$effect[see_index], result$DE$asym_lower[see_index], result$DE$boot_lower), max(result$DE$effect[see_index], result$DE$asym_upper[see_index], result$DE$boot_upper))
-    plot(time_axis, result$DE$effect, type = 'l', col = 'blue', xlim = xlim, ylim = ylim)
-    lines(time_axis, result$sick_alive$number / max(result$sick_alive$number) * (ylim[2] - ylim[1])/8 + (ylim[1]))
-    abline(0, 0, col = 'grey')
-    if(!is.null(result$DE$asym_lower)){
-      lines(time_axis, result$DE$asym_upper, col = 'blue')
-      lines(time_axis, result$DE$asym_lower, col = 'blue')
-    }
-    if(!is.null(result$DE$boot_lower)){
-      lightblue = rgb(100, 0, 255, max = 255, names = "blue50")
-      lines(my_eva_time, result$DE$boot_upper, col = lightblue)
-      lines(my_eva_time, result$DE$boot_lower, col = lightblue)
-    }
-  }
-  if(!is.null(result$IE)){
-    see_index = 1:max(which(result$converged_alpha$converged))
-    time_axis = result$IE$time/1
+  result$IE$time = result$IE$time / 365.25
+  result$DE$time = result$DE$time / 365.25
+  ylim_cumh_upper = max(result$IE$boot_upper, result$DE$boot_upper, result$IE$asym_upper, result$DE$asym_upper)
+  ylim_cumh_lower = min(result$IE$boot_lower, result$DE$boot_lower, result$IE$asym_lower, result$DE$asym_lower)
 
-    xlim = c(0, max(result$IE$time[see_index]/1))
-    ylim = c(min(result$IE$effect[see_index], result$IE$asym_lower[see_index], result$IE$boot_lower), max(result$IE$effect[see_index], result$IE$asym_upper[see_index], result$IE$boot_upper))
-    plot(time_axis, result$IE$effect, type = 'l', col = 'red', xlim = xlim, ylim = ylim)
-    lines(time_axis, result$sick_alive$number / max(result$sick_alive$number) * (ylim[2] - ylim[1])/8 + (ylim[1]))
-    abline(0, 0, col = 'grey')
-    if(!is.null(result$IE$asym_lower)){
-      lines(time_axis, result$IE$asym_upper, col = 'red')
-      lines(time_axis, result$IE$asym_lower, col = 'red')
-    }
-    if(!is.null(result$IE$boot_lower)){
-      lightred = rgb(100, 0, 255, max = 255, names = "red50")
-      lines(my_eva_time, result$IE$boot_upper, col = lightred)
-      lines(my_eva_time, result$IE$boot_lower, col = lightred)
-    }
-  }
+  ylim_surv_lower = exp(-ylim_cumh_upper)
+  ylim_surv_upper = exp(-ylim_cumh_lower)
+
+  ## plot default
+  cex.lab = 1.1
+  cex.main = 1.1
+  cex.axis = 0.85
+  las = 1
+  xlab = 'Time (years)'
+  ylab_rho = expression(paste(rho[DE](t), ',', rho[IE](t)))
+  ylab_Del = expression(paste(Delta[DE](t), ',', Delta[IE](t)))
+
+  ## bootstrap, surv
+  df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$boot_upper), lower = exp(-result$IE$boot_lower))
+  df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$boot_upper), lower = exp(-result$DE$boot_lower))
+
+  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_boot_rho.png", sep = ''), width = width, height = height)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Survival probability ratio \n Bootstrap CI, H", keyword, "V", sep = ''), xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+  legend("bottomleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+  abline(h = 1, col = "grey")
+  dev.off()
+
+
+  ## bootstrap, hazard
+  df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$boot_upper, lower = result$IE$boot_lower)
+  df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$boot_upper, lower = result$DE$boot_lower)
+
+  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_boot_cumhaz.png", sep = ''), width = width, height = height)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Cumulative hazard difference \n Bootstrap CI, H", keyword, "V", sep = ''),  xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+  legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+  abline(h = 0, col = "grey")
+  dev.off()
+
+
+  ## asymptotic, surv
+  df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$asym_upper), lower = exp(-result$IE$asym_lower))
+  df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$asym_upper), lower = exp(-result$DE$asym_lower))
+
+  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_asymp_rho.png", sep = ''), width = width, height = height)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Survival probability ratio \n Asymptotic CI, H", keyword, "V", sep = ''),  xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+  legend("bottomleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+  abline(h = 1, col = "grey")
+  dev.off()
+
+
+  ## asymptotic, hazard
+  df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$asym_upper, lower = result$IE$asym_lower)
+  df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$asym_upper, lower = result$DE$asym_lower)
+
+  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_asymp_cumhaz.png", sep = ''), width = width, height = height)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Cumulative hazard difference \n Asymptotic CI, H", keyword, "V", sep = ''), xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+  legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+  abline(h = 0, col = "grey")
+  dev.off()
 }
