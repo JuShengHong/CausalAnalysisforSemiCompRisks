@@ -7,7 +7,7 @@
 #' @param intervention numeric vector with two elements. Default is \code{c(1, 0)}.
 #' @param cal_level the level \code{X} should be evaluated at. It can be a numeric vector with \code{length(cal_level) = dim(X)[2]} or \code{"median"}, \code{"mean"}, etc. Default is \code{"median"}.
 #' @param myunit the length to be considered as one unit. Default is \code{"raw"}.
-#' @param downsample indicates how many consecutive event should be considered as the same. Default is \code{1}.
+#' @param downsample indicates how many consecutive event should be considered as one event. Default is \code{1}.
 #' @param get_variance the method to compute the variance. Choices are \code{"a"} or \code{"b"}. Default is \code{"a"}.
 #' @param boot_times the times of bootstrap. Default is \code{1000}.
 #' @param timer will show the progress. Default is \code{TRUE}.
@@ -1876,4 +1876,4 @@ getcolor = function(gamma){
   }
 }
 
-# last edit 2020/10/07 16:07
+# last edit at 2020/10/07 16:46
