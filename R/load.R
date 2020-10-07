@@ -413,6 +413,12 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     for(i in 1:repeat_size){
       df1 = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)[[1]]
       result_1 = CHH2020(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+      if(is.null(result_1$DE$boot_lower)){
+        result_1$DE$boot_lower = result_1$DE$asym_lower
+        result_1$DE$boot_upper = result_1$DE$asym_upper
+        result_1$IE$boot_lower = result_1$IE$asym_lower
+        result_1$IE$boot_upper = result_1$IE$asym_upper
+      }
       ind = floor(length(result_1$DE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
       result_1 = list(time = result_1$DE$time[ind],
                       DE = data.frame(asym_lower = result_1$DE$asym_lower[ind], asym_upper = result_1$DE$asym_upper[ind], boot_lower = result_1$DE$boot_lower[ind], boot_upper = result_1$DE$boot_upper[ind]),
@@ -421,6 +427,12 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
       if(hypo == 'null'){
         df2 = generate_df2(sample_size, myseed = i)
         result_2 = CHH2020(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+        if(is.null(result_2$DE$boot_lower)){
+          result_2$DE$boot_lower = result_2$DE$asym_lower
+          result_2$DE$boot_upper = result_2$DE$asym_upper
+          result_2$IE$boot_lower = result_2$IE$asym_lower
+          result_2$IE$boot_upper = result_2$IE$asym_upper
+        }
         ind = floor(length(result_2$IE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
         result_2 = list(DE = data.frame(asym_lower = result_2$DE$asym_lower[ind], asym_upper = result_2$DE$asym_upper[ind], boot_lower = result_2$DE$boot_lower[ind], boot_upper = result_2$DE$boot_upper[ind]),
                         IE = data.frame(asym_lower = result_2$IE$asym_lower[ind], asym_upper = result_2$IE$asym_upper[ind], boot_lower = result_2$IE$boot_lower[ind], boot_upper = result_2$IE$boot_upper[ind]))
