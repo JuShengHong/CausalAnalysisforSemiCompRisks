@@ -9,12 +9,13 @@ devtools::install_github("JuShengHong/CausalAnalysisforSemiCompRisks")
 ## Usage
 ```r
 library(CausalAnalysisforSemiCompRisks)
-# The result of the unbiasedness as presented in Figure 1 in our paper.
-simulation(1, hypo = 'null')
-simulation(1, hypo = 'alter')
+# The result of the unbiasedness as presented in Figure 1 in our paper. We repeat it 1,000
+# times to get more accurate result.
+simulation(1, hypo = 'null', repeat_size = 100)
+simulation(1, hypo = 'alter', repeat_size = 100)
 
-# The result of coverage rate as presented in Table 1 in our paper. We repeat the it 1,000
-# times and we set get_variance as c('aymptotic', 'bootstrap') to get more accurate result.
+# The result of coverage rate as presented in Table 1 in our paper. We repeat it 1,000 times
+# and we set get_variance as c('aymptotic', 'bootstrap') to get more accurate result.
 # This, however, spend plenty of time.
 simulation(2, 'null', sample_size = 1000, repeat_size = 100, get_variance = 'asymptotic')
 simulation(2, 'alter', sample_size = 1000, repeat_size = 100, get_variance = 'asymptotic')
