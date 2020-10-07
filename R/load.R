@@ -156,6 +156,11 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
     return(NULL)
   })
   }
+  if(sen_ana && plot_result){tryCatch(plot_sen_ana(result), error = function(msg){
+    print('Something wrong with the plot function. Please tell me.')
+    return(NULL)
+  })
+  }
   return(result)
 }
 
@@ -1465,7 +1470,7 @@ do_sen_ana = function(get_DE, get_IE, intervention, cal_level, estimation_alpha,
   for(gamma in gamma_list){
     counter = counter + 1
 
-    alpha_U = log(1.5)
+    alpha_U = -log(1.5)
     beta_U = -log(1.5)
     gamma_Z = abs(gamma)
     gamma_Z2 = abs(gamma)
@@ -1806,5 +1811,62 @@ plot_unbiasedness = function(result_, true_, ylim, hypo, effect, confounder, cal
   lines(time_axis, ave_DE, type = 's', lty = 1, lwd = 2)
   lines(true_$time, true_$hazard, type = 's', lty = 2, lwd = 2)
 }
+plot_sen_ana = function(result){
+  width = 400
+  height = 400
+  for(i in 1:5){
+    now_col = rep(0, 11)
+    now_gamma = result$DE$sensitivity_analysis[[i]]$gamma
+    now_effect = result$DE$sensitivity_analysis[[i]]$effect
+    now_col[1] = getcolor(now_gamma[1])
+    lwd = 1 + (now_gamma[1] == 0)
+
+    png(file = paste("/Users/js/Desktop/CHH2020/DE_", i, ".png", sep = ''), width = width, height = height)
+    plot(now_effect[[1]]$time/365.25, now_effect[[1]]$effect, type = 's', ylim = c(-0.05, 0.15), col = now_col[1], xlab = "", ylab = "",
+         main = paste("Sensitivity analysis, case", i, "\n direct effect"), lwd = lwd, cex.main = 2)
+    title(xlab = "Time (years)", ylab = expression(Delta[DE](t)), line = 2.25, cex.lab = 1.5)
+    for(j in 2:11){
+      now_col[j] = getcolor(now_gamma[j])
+      lwd = 1 + (now_gamma[j] == 0)
+      lines(now_effect[[j]]$time/365.25, now_effect[[j]]$effect, type = 's', col = now_col[j], lwd = lwd)
+    }
+    abline(h = 0)
+    legend("topleft", legend = now_gamma, col = now_col, lty = 1, lwd = 2, title = expression(gamma), ncol = 2)
+    dev.off()
 
 
+
+
+    now_col = rep(0, 11)
+    now_gamma = result$IE$sensitivity_analysis[[i]]$gamma
+    now_effect = result$IE$sensitivity_analysis[[i]]$effect
+    now_col[1] = getcolor(now_gamma[1])
+    lwd = 1 + (now_gamma[1] == 0)
+
+    png(file = paste("/Users/js/Desktop/CHH2020/IE_", i, ".png", sep = ''), width = width, height = height)
+    plot(now_effect[[1]]$time/365.25, now_effect[[1]]$effect, type = 's', ylim = c(0, 0.2), col = now_col[1], xlab = "", ylab = "",
+         main = paste("Sensitivity analysis, case", i, "\n indirect effect"), lwd = lwd, cex.main = 2)
+    title(xlab = "Time (years)", ylab = expression(Delta[IE](t)), line = 2.25, cex.lab = 1.5)
+    for(j in 2:11){
+      now_col[j] = getcolor(now_gamma[j])
+      lwd = 1 + (now_gamma[j] == 0)
+      lines(now_effect[[j]]$time/365.25, now_effect[[j]]$effect, type = 's', col = now_col[j], lwd = lwd)
+    }
+    abline(h = 0)
+    legend("topleft", legend = now_gamma, col = now_col, lty = 1, lwd = 2, title = expression(gamma), ncol = 2)
+    dev.off()
+  }
+}
+getcolor = function(gamma){
+  if(gamma == 0){
+    return("#000000")
+  }else{
+    gamma255 = floor(abs(gamma) * 255)
+    gammacolor = toupper(as.hexmode(gamma255))
+    if(gamma <= 0){
+      return(paste("#0000", gammacolor, sep = ''))
+    }else{
+      return(paste("#", gammacolor, "0000", sep = ''))
+    }
+  }
+}
