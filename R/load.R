@@ -675,6 +675,7 @@ df_shift_to_cal_level = function(df, cal_level){
 }
 
 ## others
+#' @export
 make_small = function(cox_b, unique_T2){
   # cox_b = cox_b0
   if(length(cox_b) == 1 || length(cox_b) == 0){
@@ -687,6 +688,7 @@ make_small = function(cox_b, unique_T2){
     return(cox_b)
   }
 }
+#' @export
 my_basehaz = function(time, observed, covariates, cox){
   obs_time = time[observed, 2]
 
@@ -714,9 +716,11 @@ my_basehaz = function(time, observed, covariates, cox){
   cum_haz = data.frame(cum_haz = cumsum(1/(tmp2 - tmp1)), time = obs_time)
   return(cum_haz)
 }
+#' @export
 rep.row = function(x, n){
   return(matrix(rep(x, each = n), nrow = n))
 }
+#' @export
 form_matrix = function(sd_time_indep, sd_time_mix, sd_time_dep){
   s_dim = dim(sd_time_indep)[1]
   l_dim = s_dim + length(sd_time_dep)
@@ -727,6 +731,7 @@ form_matrix = function(sd_time_indep, sd_time_mix, sd_time_dep){
   m[(s_dim+1):l_dim, (s_dim+1):l_dim] = diag(sd_time_dep)
   return(m)
 }
+#' @export
 my_eva_fun = function(fun1, points, rule = '0'){
   if(rule == 'no0'){
     return(approx(fun1[[2]], fun1[[1]], points, method = 'constant', rule = 2, ties = max)$y)
@@ -734,6 +739,7 @@ my_eva_fun = function(fun1, points, rule = '0'){
     return(approx(c(0, fun1[[2]]), c(0, fun1[[1]]), points, method = 'constant', rule = 2, ties = max)$y)
   }
 }
+#' @export
 get_position = function(x, y){
   # get_position returns vector z.
   # z_i := min_j(x_i<=y_j)
@@ -767,6 +773,7 @@ get_position = function(x, y){
 }
 
 ## bootstrap variance
+#' @export
 my_sort_mat = function(mat){
   mat_na = is.na(mat)
   if(sum(mat_na) == 0){
@@ -779,6 +786,7 @@ my_sort_mat = function(mat){
 }
 
 ## estimation
+#' @export
 estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance, timer, num_of_cores, variance_method, threshold){
   # cox_b0 = small_cox_b0; cox_b1 = small_cox_b1
 
@@ -1088,6 +1096,7 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
     return(list(time = unique_T2, coeff = alpha_mat, sick_alive = sick_alive, healthy_alive = healthy_alive, alive = alive, converged_alpha = converged_alpha, exact_time = exact_time))
   }
 }
+#' @export
 mycoxph = function(time, observed, covariates, get_variance = TRUE){
   # time = time_b0; observed = observed_b0; covariates = covariates
   # time = time_b1; observed = observed_b1; covariates = as.matrix(covariates[df$d1, ])
@@ -1121,6 +1130,7 @@ mycoxph = function(time, observed, covariates, get_variance = TRUE){
 }
 
 ## asymptotics
+#' @export
 inv_coxinformation = function(df_, coeff_, cum_haz_){
   ## example: a
   # df_ = df_all$a
@@ -1219,6 +1229,7 @@ inv_coxinformation = function(df_, coeff_, cum_haz_){
   inv_coxinf$coxinf = coxinf
   return(inv_coxinf)
 }
+#' @export
 compute_variance = function(get_DE, get_IE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1, b0_time, b1_time){
   if(get_DE){za_iv1 = intervention[1]; zb_iv1 = intervention[2]; za_iv2 = intervention[2]; zb_iv2 = intervention[2];}
   if(get_IE){za_iv1 = intervention[1]; zb_iv1 = intervention[1]; za_iv2 = intervention[1]; zb_iv2 = intervention[2];}
@@ -1249,6 +1260,7 @@ compute_variance = function(get_DE, get_IE, intervention, cal_level, estimation_
   variance = alpha_variance + beta_variance
   return(data.frame(variance = variance, alpha_variance = alpha_variance, beta_variance = beta_variance))
 }
+#' @export
 get_pd = function(za_iv, zb_iv, estimation_alpha, cal_level, cox_b0, cox_b1, b0_time, b1_time){
   # za_iv = za_iv1; zb_iv = zb_iv1
   # za_iv = za_iv2; zb_iv = zb_iv2
@@ -1301,6 +1313,7 @@ get_pd = function(za_iv, zb_iv, estimation_alpha, cal_level, cox_b0, cox_b1, b0_
 
   return(pd)
 }
+#' @export
 get_alpha_variance = function(pd_alpha, alpha_cov){
   # alpha_cov = estimation_alpha$cov
   n_row = dim(pd_alpha)[1]
@@ -1333,6 +1346,7 @@ get_alpha_variance = function(pd_alpha, alpha_cov){
   alpha_variance[alpha_variance < 0] = 0
   return(alpha_variance)
 }
+#' @export
 get_beta_variance = function(pd_beta_vec, pd_cum_beta, beta_cov){
   # pd_beta_vec = pd_beta_vec_0; pd_cum_beta = pd_cum_beta_0; beta_cov = cox_b0$cov;
   # pd_beta_vec = pd_beta_vec_1; pd_cum_beta = pd_cum_beta_1; beta_cov = cox_b1$cov;
@@ -1351,6 +1365,7 @@ get_beta_variance = function(pd_beta_vec, pd_cum_beta, beta_cov){
 }
 
 ## sensitivity analysis
+#' @export
 do_sen_ana = function(get_DE, get_IE, intervention, cal_level, estimation_alpha, small_cox_b0, small_cox_b1){
   if(get_DE){za_iv1 = intervention[1]; zb_iv1 = intervention[2]; za_iv2 = intervention[2]; zb_iv2 = intervention[2];}
   if(get_IE){za_iv1 = intervention[1]; zb_iv1 = intervention[1]; za_iv2 = intervention[1]; zb_iv2 = intervention[2];}
@@ -1521,6 +1536,7 @@ do_sen_ana = function(get_DE, get_IE, intervention, cal_level, estimation_alpha,
 }
 
 ## counterfactual hazard
+#' @export
 get_counterfactual_hazard = function(za_iv, zb_iv, cal_level, estimation_alpha, cox_b0, cox_b1){
   # cal_level = cal_level_tmp
   # za_iv = za_iv1; zb_iv = zb_iv1;
@@ -1562,6 +1578,7 @@ get_counterfactual_hazard = function(za_iv, zb_iv, cal_level, estimation_alpha, 
   counterfactual_hazard = n1_0 + n1_1
   return(counterfactual_hazard)
 }
+#' @export
 estimate_effect = function(df, effect, intervention, cal_level, sen_ana, get_variance, boot_times, timer, num_of_cores, unique_T2, b0_time, b1_time, variance_method, threshold){
   ## beta part
   # auxiliary
@@ -1770,13 +1787,5 @@ plot_unbiasedness = function(result_, true_, ylim, hypo, effect, confounder, cal
   lines(time_axis, ave_DE, type = 's', lty = 1, lwd = 2)
   lines(true_$time, true_$hazard, type = 's', lty = 2, lwd = 2)
 }
-
-
-
-
-
-
-
-
 
 
