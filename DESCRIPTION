@@ -1,5 +1,5 @@
 Package: CausalAnalysisforSemiCompRisks
-Title: What the Package Does (One Line, Title Case)
+Title: Analyzing Semi-Competing Risks Data Using Causal Mediation Inference
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "First",

@@ -1876,4 +1876,4 @@ getcolor = function(gamma){
   }
 }
 
-# end 2020/10/07
+# last edit 2020/10/07 16:07

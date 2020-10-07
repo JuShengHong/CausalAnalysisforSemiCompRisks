@@ -28,7 +28,7 @@ simulation(
 \item{timer}{will show the progress. Default is \code{TRUE}.}
 }
 \value{
-\code{CHH2020} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
+\code{CASCR} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
 }
 \description{
 This function analysis semicompeting risks data and gives the estimators of direct and indirect effects, along with their variances.
