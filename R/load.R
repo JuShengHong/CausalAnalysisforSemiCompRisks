@@ -307,15 +307,15 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
   width = 500
   height = 500
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_no_conf.png", sep = ''), width = width, height = height)
-  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = F, intervention = c(2, 1))
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = F, intervention = c(2, 1), by = 1e-2)
   plot_successful = plot_unbiasedness(result_DE$FF, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = F, calibration = F)
   # dev.off()
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_unadj_conf.png", sep = ''), width = width, height = height)
-  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1))
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1), by = 1e-2)
   plot_successful = plot_unbiasedness(result_DE$TF, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = T, calibration = F)
   # dev.off()
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_adj_conf.png", sep = ''), width = width, height = height)
-  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1))
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1), by = 1e-2)
   plot_successful = plot_unbiasedness(result_DE$TT, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = T, calibration = T)
   # dev.off()
 
@@ -325,15 +325,15 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
     min_max_IE = c(-0.6, 0.3)
   }
 
-  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = F, intervention = c(2, 1))
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = F, intervention = c(2, 1), by = 1e-2)
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_no_conf.png", sep = ''), width = width, height = height)
   plot_successful = plot_unbiasedness(result_IE$FF, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = F, calibration = F)
   # dev.off()
-  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1))
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1), by = 1e-2)
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_unadj_conf.png", sep = ''), width = width, height = height)
   plot_successful = plot_unbiasedness(result_IE$TF, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = T, calibration = F)
   # dev.off()
-  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1))
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1), by = 1e-2)
   # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_adj_conf.png", sep = ''), width = width, height = height)
   plot_successful = plot_unbiasedness(result_IE$TT, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = T, calibration = T)
   # dev.off()
@@ -511,10 +511,10 @@ generate_df2 = function(sample_size, myseed = 1){
   return(df)
 }
 #' @export
-alternative_z_1_2 = function(hypo, effect, confounder, intervention){
+alternative_z_1_2 = function(hypo, effect, confounder, intervention, time_by = 5e-4){
   tstart = 0
   tend = 4
-  t = seq(tstart, tend, by = 5e-4)
+  t = seq(tstart, tend, by = time_by)
   diff_t = t[2] - t[1]
   alpha1Z = 0.25 * (hypo == 'alter')
   alpha2Z = 0.25 * (hypo == 'alter')
