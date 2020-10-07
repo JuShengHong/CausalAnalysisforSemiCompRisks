@@ -510,6 +510,7 @@ generate_df2 = function(sample_size, myseed = 1){
   df = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z)
   return(df)
 }
+#' @export
 alternative_z_1_2 = function(hypo, effect, confounder, intervention){
   tstart = 0
   tend = 4
