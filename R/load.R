@@ -460,6 +460,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
 }
 
 ## simulation
+#' @export
 generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, myseed = 1){
   df_all = vector(mode = 'list', length = repeat_size)
   set.seed(myseed)
@@ -487,6 +488,7 @@ generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, 
   }
   return(df_all)
 }
+#' @export
 generate_df2 = function(sample_size, myseed = 1){
   set.seed(myseed)
   Z = c(rep(1, sample_size/2), rep(2, sample_size/2))
@@ -547,6 +549,7 @@ alternative_z_1_2 = function(hypo, effect, confounder, intervention){
 }
 
 ## data related
+#' @export
 downsample_func = function(vec, downsample){
   if(length(vec) %% downsample == 1){
     return(vec[seq(1, length(vec), by = downsample)])
@@ -554,6 +557,7 @@ downsample_func = function(vec, downsample){
     return(vec[c(seq(1, length(vec), by = downsample), length(vec))])
   }
 }
+#' @export
 data_preprocess = function(df, myunit, downsample){
   set.seed(1)
   ## remove unreasonable columns
@@ -652,6 +656,7 @@ data_preprocess = function(df, myunit, downsample){
   df = list(df = df, unique_T2 = unique_T2, b0_time = b0_time, b1_time = b1_time)
   return(df)
 }
+#' @export
 df_shift_to_cal_level = function(df, cal_level){
   num_cal = dim(df)[2] - 5
   if(num_cal == 0){
@@ -1670,28 +1675,29 @@ plot_CHH2020 = function(result){
   ylab_rho = expression(paste(rho[DE](t), ',', rho[IE](t)))
   ylab_Del = expression(paste(Delta[DE](t), ',', Delta[IE](t)))
 
-  ## bootstrap, surv
-  df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$boot_upper), lower = exp(-result$IE$boot_lower))
-  df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$boot_upper), lower = exp(-result$DE$boot_lower))
+  if(!is.null(result$DE$boot_upper)){
+    ## bootstrap, surv
+    df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$boot_upper), lower = exp(-result$IE$boot_lower))
+    df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$boot_upper), lower = exp(-result$DE$boot_lower))
 
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Survival probability ratio \n Bootstrap CI", xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
-  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
-  legend("bottomleft", legend = c("Indirect effct", "Direct effect"), fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
-  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
-  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
-  abline(h = 1, col = "grey")
+    plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Survival probability ratio \n Bootstrap CI", xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+    lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+    legend("bottomleft", legend = c("Indirect effct", "Direct effect"), fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+    plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+    plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+    abline(h = 1, col = "grey")
 
-  ## bootstrap, hazard
-  df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$boot_upper, lower = result$IE$boot_lower)
-  df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$boot_upper, lower = result$DE$boot_lower)
+    ## bootstrap, hazard
+    df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$boot_upper, lower = result$IE$boot_lower)
+    df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$boot_upper, lower = result$DE$boot_lower)
 
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Cumulative hazard difference \n Bootstrap CI",  xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
-  lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
-  legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
-  plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
-  plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
-  abline(h = 0, col = "grey")
-
+    plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Cumulative hazard difference \n Bootstrap CI",  xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+    lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
+    legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+    plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
+    plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
+    abline(h = 0, col = "grey")
+  }
 
   ## asymptotic, surv
   df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$asym_upper), lower = exp(-result$IE$asym_lower))
