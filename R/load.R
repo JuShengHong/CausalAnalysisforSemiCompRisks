@@ -58,7 +58,7 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
       ## num_of_cores set-up
       cores = num_of_cores
       cl = snow::makeCluster(cores[1])
-      my_functions = c("downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+      my_functions = c("downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
       snow::clusterExport(cl, my_functions)
       doSNOW::registerDoSNOW(cl)
       pb = txtProgressBar(max = boot_times, style = 3)
@@ -203,7 +203,7 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
     ## num_of_cores set-up
     cores = num_of_cores
     cl = snow::makeCluster(cores[1])
-    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
     snow::clusterExport(cl, my_functions)
     doSNOW::registerDoSNOW(cl)
     pb = txtProgressBar(max = repeat_size, style = 3)
@@ -350,7 +350,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     ## num_of_cores set-up
     cores = num_of_cores
     cl = snow::makeCluster(cores[1])
-    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
     snow::clusterExport(cl, my_functions)
     doSNOW::registerDoSNOW(cl)
     pb = txtProgressBar(max = repeat_size, style = 3)
@@ -668,7 +668,7 @@ df_shift_to_cal_level = function(df, cal_level){
     cal_level = sapply(df, median)[6:(5 + num_cal)]
   }
   if(num_cal > 0){
-    df[, 6:(5 + num_cal)] = df[, 6:(5 + num_cal)] - rep.row(cal_level, dim(df)[1])
+    df[, 6:(5 + num_cal)] = df[, 6:(5 + num_cal)] - my_rep_row(cal_level, dim(df)[1])
     cal_level = rep(0, dim(df)[2] - 5)
   }
   return(list(df = df, cal_level = cal_level))
@@ -717,7 +717,7 @@ my_basehaz = function(time, observed, covariates, cox){
   return(cum_haz)
 }
 #' @export
-rep.row = function(x, n){
+my_rep_row = function(x, n){
   return(matrix(rep(x, each = n), nrow = n))
 }
 #' @export
