@@ -479,7 +479,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
   }
 }
 
-## simulation 123
+## simulation
 #' @export
 generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, myseed = 1){
   df_all = vector(mode = 'list', length = repeat_size)
