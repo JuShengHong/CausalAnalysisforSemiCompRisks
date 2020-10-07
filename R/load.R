@@ -1821,7 +1821,7 @@ plot_sen_ana = function(result){
     now_col[1] = getcolor(now_gamma[1])
     lwd = 1 + (now_gamma[1] == 0)
 
-    png(file = paste("/Users/js/Desktop/CHH2020/DE_", i, ".png", sep = ''), width = width, height = height)
+    # png(file = paste("/Users/js/Desktop/CHH2020/DE_", i, ".png", sep = ''), width = width, height = height)
     plot(now_effect[[1]]$time/365.25, now_effect[[1]]$effect, type = 's', ylim = c(-0.05, 0.15), col = now_col[1], xlab = "", ylab = "",
          main = paste("Sensitivity analysis, case", i, "\n direct effect"), lwd = lwd, cex.main = 2)
     title(xlab = "Time (years)", ylab = expression(Delta[DE](t)), line = 2.25, cex.lab = 1.5)
@@ -1832,7 +1832,7 @@ plot_sen_ana = function(result){
     }
     abline(h = 0)
     legend("topleft", legend = now_gamma, col = now_col, lty = 1, lwd = 2, title = expression(gamma), ncol = 2)
-    dev.off()
+    # dev.off()
 
 
 
@@ -1843,7 +1843,7 @@ plot_sen_ana = function(result){
     now_col[1] = getcolor(now_gamma[1])
     lwd = 1 + (now_gamma[1] == 0)
 
-    png(file = paste("/Users/js/Desktop/CHH2020/IE_", i, ".png", sep = ''), width = width, height = height)
+    # png(file = paste("/Users/js/Desktop/CHH2020/IE_", i, ".png", sep = ''), width = width, height = height)
     plot(now_effect[[1]]$time/365.25, now_effect[[1]]$effect, type = 's', ylim = c(0, 0.2), col = now_col[1], xlab = "", ylab = "",
          main = paste("Sensitivity analysis, case", i, "\n indirect effect"), lwd = lwd, cex.main = 2)
     title(xlab = "Time (years)", ylab = expression(Delta[IE](t)), line = 2.25, cex.lab = 1.5)
@@ -1854,7 +1854,7 @@ plot_sen_ana = function(result){
     }
     abline(h = 0)
     legend("topleft", legend = now_gamma, col = now_col, lty = 1, lwd = 2, title = expression(gamma), ncol = 2)
-    dev.off()
+    # dev.off()
   }
 }
 getcolor = function(gamma){

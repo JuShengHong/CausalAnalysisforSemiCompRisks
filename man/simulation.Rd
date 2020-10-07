@@ -10,7 +10,8 @@ simulation(
   sample_size = 1000,
   repeat_size = 1000,
   num_of_cores = 1,
-  timer = TRUE
+  timer = TRUE,
+  get_variance = c("a", "b")
 )
 }
 \arguments{
