@@ -16,9 +16,9 @@
 #' @param plot_result will show some primary result. Default is \code{FALSE}.
 #' @param variance_method will be deleted.
 #' @param threshold specifies if a logistic regression converge or not. Default is \code{1e-12}.
-#' @return \code{CHH2020} returns a list with components specified by \code{effect}.
+#' @return \code{CASCR} returns a list with components specified by \code{effect}.
 #' @export
-CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level = 'median', myunit = 'raw', downsample = 1, sen_ana = FALSE, get_variance = c('asymptotic'), boot_times = 1000, timer = TRUE, num_of_cores = 1, plot_result = FALSE, variance_method = 'new', threshold = 1e-12){
+CASCR = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level = 'median', myunit = 'raw', downsample = 1, sen_ana = FALSE, get_variance = c('asymptotic'), boot_times = 1000, timer = TRUE, num_of_cores = 1, plot_result = FALSE, variance_method = 'new', threshold = 1e-12){
   # protect the original data
   dff = df
 
@@ -174,7 +174,7 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
 #' @param repeat_size Default is \code{1000}.
 #' @param num_of_cores the number of cores assigned. Default is \code{1}.
 #' @param timer will show the progress. Default is \code{TRUE}.
-#' @return \code{CHH2020} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
+#' @return \code{CASCR} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
 #' @export
 simulation = function(simulation_type, hypo, sample_size = 1000, repeat_size = 1000, num_of_cores = 1, timer = TRUE, get_variance = c('a', 'b')){
   if(simulation_type == 1){
@@ -208,7 +208,7 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
     ## num_of_cores set-up
     cores = num_of_cores
     cl = snow::makeCluster(cores[1])
-    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
+    my_functions = c("CASCR", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
     snow::clusterExport(cl, my_functions)
     doSNOW::registerDoSNOW(cl)
     pb = txtProgressBar(max = repeat_size, style = 3)
@@ -221,9 +221,9 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
       df_TF = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = F, myseed = i)
       df_TT = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = T, myseed = i)
 
-      result_FF = CHH2020(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
-      result_TF = CHH2020(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
-      result_TT = CHH2020(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_FF = CASCR(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TF = CASCR(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TT = CASCR(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
       result_now = list(result_FF = result_FF, result_TF = result_TF, result_TT = result_TT)
       gc()
       return(list(result_now))
@@ -275,9 +275,9 @@ unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer 
       df_TF = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = F, myseed = i)
       df_TT = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = T, myseed = i)
 
-      result_FF = CHH2020(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
-      result_TF = CHH2020(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
-      result_TT = CHH2020(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_FF = CASCR(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TF = CASCR(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TT = CASCR(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
 
       result_DE$FF[[i]]$time   = result_FF$DE$time
       result_DE$FF[[i]]$effect = result_FF$DE$effect
@@ -355,7 +355,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     ## num_of_cores set-up
     cores = num_of_cores
     cl = snow::makeCluster(cores[1])
-    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
+    my_functions = c("CASCR", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "my_rep_row")
     snow::clusterExport(cl, my_functions)
     doSNOW::registerDoSNOW(cl)
     pb = txtProgressBar(max = repeat_size, style = 3)
@@ -365,7 +365,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     i = 1; myunit = 'raw'; variance_method = 'new'
     result_now = foreach(i = 1:repeat_size, .options.snow = opts, .combine = 'c', .export = my_functions)%dopar%{
       df1 = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)[[1]]
-      result_1 = CHH2020(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+      result_1 = CASCR(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
       if(is.null(result_1$DE$boot_lower)){
         result_1$DE$boot_lower = result_1$DE$asym_lower
         result_1$DE$boot_upper = result_1$DE$asym_upper
@@ -379,7 +379,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
 
       if(hypo == 'null'){
         df2 = generate_df2(sample_size, myseed = i)
-        result_2 = CHH2020(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+        result_2 = CASCR(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
         if(is.null(result_2$DE$boot_lower)){
           result_2$DE$boot_lower = result_2$DE$asym_lower
           result_2$DE$boot_upper = result_2$DE$asym_upper
@@ -417,7 +417,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     i = 1; myunit = 'raw'; variance_method = 'new'
     for(i in 1:repeat_size){
       df1 = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)[[1]]
-      result_1 = CHH2020(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+      result_1 = CASCR(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
       if(is.null(result_1$DE$boot_lower)){
         result_1$DE$boot_lower = result_1$DE$asym_lower
         result_1$DE$boot_upper = result_1$DE$asym_upper
@@ -431,7 +431,7 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
 
       if(hypo == 'null'){
         df2 = generate_df2(sample_size, myseed = i)
-        result_2 = CHH2020(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+        result_2 = CASCR(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
         if(is.null(result_2$DE$boot_lower)){
           result_2$DE$boot_lower = result_2$DE$asym_lower
           result_2$DE$boot_upper = result_2$DE$asym_upper
