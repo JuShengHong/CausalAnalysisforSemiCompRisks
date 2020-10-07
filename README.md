@@ -23,6 +23,16 @@ simulation(2, 'alter', sample_size = 1000, repeat_size = 100, get_variance = 'as
 # We set get_variance as c('aymptotic', 'bootstrap') in our paper.
 result = CASCR(REVEAL_HBV, plot_result = T, get_variance = 'asymptotic')
 
-# To get a quick result, one can run the following code. It will take around 2-3 minutes.
+# To get a quick result including bootstrap variance, one can run the following code.
+# It will take around 15 minutes.
 result = CASCR(REVEAL_HBV, downsample = 60, plot_result = T, get_variance = c('asymptotic', 'bootstrap'))
+
+# The result of sensitivity analysis as presented in Supplement Material in Section 11.
+result = CHH2020(REVEAL_HBV, sen_ana = T, get_variance = NULL)
+```
+
+## More details
+More details such as the input data type, parallel programming, and the output can be found using
+```r
+?CASCR
 ```
