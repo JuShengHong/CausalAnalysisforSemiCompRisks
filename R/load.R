@@ -18,7 +18,7 @@
 #' @param threshold specifies if a logistic regression converge or not. Default is \code{1e-12}.
 #' @return \code{CHH2020} returns a list with components specified by \code{effect}.
 #' @export
-CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level = 'median', myunit = 'raw', downsample = 1, sen_ana = FALSE, get_variance = c('asymptotic'), boot_times = 1000, timer = TRUE, num_of_cores = 1, plot_result = FALSE, variance_method = 'old', threshold = 1e-12){
+CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level = 'median', myunit = 'raw', downsample = 1, sen_ana = FALSE, get_variance = c('asymptotic'), boot_times = 1000, timer = TRUE, num_of_cores = 1, plot_result = FALSE, variance_method = 'new', threshold = 1e-12){
   # protect the original data
   dff = df
 
@@ -58,7 +58,7 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
       ## num_of_cores set-up
       cores = num_of_cores
       cl = snow::makeCluster(cores[1])
-      my_functions = c("downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "get_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+      my_functions = c("downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
       snow::clusterExport(cl, my_functions)
       doSNOW::registerDoSNOW(cl)
       pb = txtProgressBar(max = boot_times, style = 3)
@@ -151,7 +151,7 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
       result$IE$boot_upper = boot_IE_mat[boot_variance_id[2], ]
     }
   }
-  if(plot_result){tryCatch(plot_CHH2020(result, my_eva_time), error = function(msg){
+  if(plot_result){tryCatch(plot_CHH2020(result), error = function(msg){
     print('Something wrong with the plot function. Please tell me.')
     return(NULL)
   })
@@ -159,28 +159,322 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
   return(result)
 }
 
-simulation = function(sample_size, hypo, simulation_type){
+#' Semiparametric Causal Mediation Modeling of Semi-Competing Risks
+#'
+#' This function analysis semicompeting risks data and gives the estimators of direct and indirect effects, along with their variances.
+#'
+#' @param simulation_type Choices are \code{1} (unbiasedness) or \code{2} (coverage).
+#' @param hypo Choices are \code{null} or \code{alter}.
+#' @param sample_size a number only effective when \code{simulation_type = 2}. Default is \code{1000}.
+#' @param repeat_size Default is \code{1000}.
+#' @param num_of_cores the number of cores assigned. Default is \code{1}.
+#' @param timer will show the progress. Default is \code{TRUE}.
+#' @return \code{CHH2020} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
+#' @export
+simulation = function(simulation_type, hypo, sample_size = 1000, repeat_size = 1000, num_of_cores = 1, timer = TRUE){
+  if(simulation_type == 1){
+    plot_successful = unbiasedness(hypo = hypo, sample_size = 1000, repeat_size = repeat_size, num_of_cores = num_of_cores, timer = timer)
+    return(NULL)
+  }else if(simulation_type == 2){
+    coverage_rate = coverage(hypo = hypo, sample_size = sample_size, repeat_size = repeat_size, num_of_cores = num_of_cores, timer = timer)
+    return(coverage_rate)
+  }else{
+    warning("Unreconginized simulation type.")
+    return(NULL)
+  }
+}
+unbiasedness = function(hypo, sample_size, repeat_size, num_of_cores = 1, timer = TRUE){
+  result_DE = list()
+  result_DE$FF = vector(mode = "list", length = repeat_size)
+  result_DE$TF = vector(mode = "list", length = repeat_size)
+  result_DE$TT = vector(mode = "list", length = repeat_size)
 
+  result_IE = list()
+  result_IE$FF = vector(mode = "list", length = repeat_size)
+  result_IE$TF = vector(mode = "list", length = repeat_size)
+  result_IE$TT = vector(mode = "list", length = repeat_size)
+
+  min_max_DE = c(0, 0)
+  min_max_IE = c(0, 0)
+
+  if(num_of_cores > 1){
+    require(foreach)
+
+    ## num_of_cores set-up
+    cores = num_of_cores
+    cl = snow::makeCluster(cores[1])
+    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+    snow::clusterExport(cl, my_functions)
+    doSNOW::registerDoSNOW(cl)
+    pb = txtProgressBar(max = repeat_size, style = 3)
+    progress = function(n) setTxtProgressBar(pb, n)
+    opts = list(progress = progress)
+
+    i = 1
+    result_now = foreach(i = 1:repeat_size, .options.snow = opts, .combine = 'c', .export = my_functions)%dopar%{
+      df_FF = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)
+      df_TF = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = F, myseed = i)
+      df_TT = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = T, myseed = i)
+
+      result_FF = CHH2020(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TF = CHH2020(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TT = CHH2020(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_now = list(result_FF = result_FF, result_TF = result_TF, result_TT = result_TT)
+      gc()
+      return(list(result_now))
+    }
+    snow::stopCluster(cl)
+    pracma::fprintf('\n')
+
+    for(i in 1:repeat_size){
+      result_DE$FF[[i]]$time   = result_now[[i]][[1]]$DE$time
+      result_DE$FF[[i]]$effect = result_now[[i]][[1]]$DE$effect
+      result_DE$FF[[i]]$sick   = result_now[[i]][[1]]$cox_b1$cum_haz$time
+      result_DE$TF[[i]]$time   = result_now[[i]][[2]]$DE$time
+      result_DE$TF[[i]]$effect = result_now[[i]][[2]]$DE$effect
+      result_DE$TF[[i]]$sick   = result_now[[i]][[2]]$cox_b1$cum_haz$time
+      result_DE$TT[[i]]$time   = result_now[[i]][[3]]$DE$time
+      result_DE$TT[[i]]$effect = result_now[[i]][[3]]$DE$effect
+      result_DE$TT[[i]]$sick   = result_now[[i]][[3]]$cox_b1$cum_haz$time
+
+      result_IE$FF[[i]]$time   = result_now[[i]][[1]]$IE$time
+      result_IE$FF[[i]]$effect = result_now[[i]][[1]]$IE$effect
+      result_IE$FF[[i]]$sick   = result_now[[i]][[1]]$cox_b1$cum_haz$time
+      result_IE$TF[[i]]$time   = result_now[[i]][[2]]$IE$time
+      result_IE$TF[[i]]$effect = result_now[[i]][[2]]$IE$effect
+      result_IE$TF[[i]]$sick   = result_now[[i]][[2]]$cox_b1$cum_haz$time
+      result_IE$TT[[i]]$time   = result_now[[i]][[3]]$IE$time
+      result_IE$TT[[i]]$effect = result_now[[i]][[3]]$IE$effect
+      result_IE$TT[[i]]$sick   = result_now[[i]][[3]]$cox_b1$cum_haz$time
+
+      min_max_DE[1] = min(min_max_DE[1], result_DE$FF[[i]]$effect, result_DE$TF[[i]]$effect, result_DE$TT[[i]]$effect)
+      min_max_DE[2] = max(min_max_DE[2], result_DE$FF[[i]]$effect, result_DE$TF[[i]]$effect, result_DE$TT[[i]]$effect)
+
+      min_max_IE[1] = min(min_max_IE[1], result_IE$FF[[i]]$effect, result_IE$TF[[i]]$effect, result_IE$TT[[i]]$effect)
+      min_max_IE[2] = max(min_max_IE[2], result_IE$FF[[i]]$effect, result_IE$TF[[i]]$effect, result_IE$TT[[i]]$effect)
+    }
+  }else{
+    ## fetch basic parameter
+    if(timer){
+      space = 100
+      pracma::fprintf('| bootstrap        20        30        40        50        60        70        80        90    100 |\n')
+      loop_count = 1:repeat_size
+      counter_total = repeat_size
+      cum_bar_num = my_eva_fun(list(1:space, 1:space / space * counter_total), loop_count, rule = '0')
+      bar_num = diff(c(0, cum_bar_num))
+    }
+    i = 1
+    for(i in 1:repeat_size){
+      # print(i)
+      df_FF = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)
+      df_TF = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = F, myseed = i)
+      df_TT = generate_df(sample_size, repeat_size = 1, hypo, confounder = T, calibration = T, myseed = i)
+
+      result_FF = CHH2020(df_FF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TF = CHH2020(df_TF[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+      result_TT = CHH2020(df_TT[[1]], get_variance = NULL, timer = FALSE, intervention = c(2, 1))
+
+      result_DE$FF[[i]]$time   = result_FF$DE$time
+      result_DE$FF[[i]]$effect = result_FF$DE$effect
+      result_DE$FF[[i]]$sick   = result_FF$cox_b1$cum_haz$time
+      result_DE$TF[[i]]$time   = result_TF$DE$time
+      result_DE$TF[[i]]$effect = result_TF$DE$effect
+      result_DE$TF[[i]]$sick   = result_TF$cox_b1$cum_haz$time
+      result_DE$TT[[i]]$time   = result_TT$DE$time
+      result_DE$TT[[i]]$effect = result_TT$DE$effect
+      result_DE$TT[[i]]$sick   = result_TT$cox_b1$cum_haz$time
+
+      result_IE$FF[[i]]$time   = result_FF$IE$time
+      result_IE$FF[[i]]$effect = result_FF$IE$effect
+      result_IE$FF[[i]]$sick   = result_FF$cox_b1$cum_haz$time
+      result_IE$TF[[i]]$time   = result_TF$IE$time
+      result_IE$TF[[i]]$effect = result_TF$IE$effect
+      result_IE$TF[[i]]$sick   = result_TF$cox_b1$cum_haz$time
+      result_IE$TT[[i]]$time   = result_TT$IE$time
+      result_IE$TT[[i]]$effect = result_TT$IE$effect
+      result_IE$TT[[i]]$sick   = result_TT$cox_b1$cum_haz$time
+
+      min_max_DE[1] = min(min_max_DE[1], result_DE$FF[[i]]$effect, result_DE$TF[[i]]$effect, result_DE$TT[[i]]$effect)
+      min_max_DE[2] = max(min_max_DE[2], result_DE$FF[[i]]$effect, result_DE$TF[[i]]$effect, result_DE$TT[[i]]$effect)
+
+      min_max_IE[1] = min(min_max_IE[1], result_IE$FF[[i]]$effect, result_IE$TF[[i]]$effect, result_IE$TT[[i]]$effect)
+      min_max_IE[2] = max(min_max_IE[2], result_IE$FF[[i]]$effect, result_IE$TF[[i]]$effect, result_IE$TT[[i]]$effect)
+      if(timer && bar_num[i] > 0){for(i in 1:bar_num[i]){pracma::fprintf('-')}}
+    }
+    if(timer){pracma::fprintf('\n')}
+  }
+
+  width = 500
+  height = 500
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_no_conf.png", sep = ''), width = width, height = height)
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = F, intervention = c(2, 1))
+  plot_successful = plot_unbiasedness(result_DE$FF, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = F, calibration = F)
+  # dev.off()
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_unadj_conf.png", sep = ''), width = width, height = height)
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1))
+  plot_successful = plot_unbiasedness(result_DE$TF, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = T, calibration = F)
+  # dev.off()
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_DE_", hypo, "_adj_conf.png", sep = ''), width = width, height = height)
+  true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = T, intervention = c(2, 1))
+  plot_successful = plot_unbiasedness(result_DE$TT, true_DE, ylim = min_max_DE, hypo, effect = 'DE', confounder = T, calibration = T)
+  # dev.off()
+
+  if(hypo == "null"){
+    min_max_IE = c(-0.5, 0.5)
+  }else{
+    min_max_IE = c(-0.6, 0.3)
+  }
+
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = F, intervention = c(2, 1))
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_no_conf.png", sep = ''), width = width, height = height)
+  plot_successful = plot_unbiasedness(result_IE$FF, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = F, calibration = F)
+  # dev.off()
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1))
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_unadj_conf.png", sep = ''), width = width, height = height)
+  plot_successful = plot_unbiasedness(result_IE$TF, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = T, calibration = F)
+  # dev.off()
+  true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = T, intervention = c(2, 1))
+  # png(file = paste("/Users/js/Desktop/CHH2020/bias_IE_", hypo, "_adj_conf.png", sep = ''), width = width, height = height)
+  plot_successful = plot_unbiasedness(result_IE$TT, true_IE, ylim = min_max_IE, hypo, effect = 'IE', confounder = T, calibration = T)
+  # dev.off()
+  return(TRUE)
+}
+coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, get_variance = c('a', 'b')){
+  if(hypo == 'alter'){
+    true_DE = alternative_z_1_2(hypo, effect = 'DE', confounder = F, intervention = c(2, 1))
+    true_IE = alternative_z_1_2(hypo, effect = 'IE', confounder = F, intervention = c(2, 1))
+  }
+  if(num_of_cores > 1){
+    require(foreach)
+
+    ## num_of_cores set-up
+    cores = num_of_cores
+    cl = snow::makeCluster(cores[1])
+    my_functions = c("CHH2020", "generate_df", "generate_df2", "alternative_z_1_2", "downsample_func", "data_preprocess", "df_shift_to_cal_level", "do_sen_ana", "estimate_alpha", "estimate_effect", "form_matrix", "get_alpha_variance", "get_beta_variance", "get_counterfactual_hazard", "get_pd", "get_position", "compute_variance", "inv_coxinformation", "make_small", "my_basehaz", "my_eva_fun", "my_sort_mat", "mycoxph", "rep.row")
+    snow::clusterExport(cl, my_functions)
+    doSNOW::registerDoSNOW(cl)
+    pb = txtProgressBar(max = repeat_size, style = 3)
+    progress = function(n) setTxtProgressBar(pb, n)
+    opts = list(progress = progress)
+
+    i = 1; myunit = 'raw'; variance_method = 'new'
+    result_now = foreach(i = 1:repeat_size, .options.snow = opts, .combine = 'c', .export = my_functions)%dopar%{
+      df1 = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)[[1]]
+      result_1 = CHH2020(df1, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+      if(is.null(result_1$DE$boot_lower)){
+        result_1$DE$boot_lower = result_1$DE$asym_lower
+        result_1$DE$boot_upper = result_1$DE$asym_upper
+        result_1$IE$boot_lower = result_1$IE$asym_lower
+        result_1$IE$boot_upper = result_1$IE$asym_upper
+      }
+      ind = floor(length(result_1$DE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
+      result_1 = list(time = result_1$DE$time[ind],
+                      DE = data.frame(asym_lower = result_1$DE$asym_lower[ind], asym_upper = result_1$DE$asym_upper[ind], boot_lower = result_1$DE$boot_lower[ind], boot_upper = result_1$DE$boot_upper[ind]),
+                      IE = data.frame(asym_lower = result_1$IE$asym_lower[ind], asym_upper = result_1$IE$asym_upper[ind], boot_lower = result_1$IE$boot_lower[ind], boot_upper = result_1$IE$boot_upper[ind]))
+
+      if(hypo == 'null'){
+        df2 = generate_df2(sample_size, myseed = i)
+        result_2 = CHH2020(df2, get_variance = get_variance, timer = FALSE, intervention = c(2, 1), myunit = myunit, variance_method = variance_method)
+        if(is.null(result_2$DE$boot_lower)){
+          result_2$DE$boot_lower = result_2$DE$asym_lower
+          result_2$DE$boot_upper = result_2$DE$asym_upper
+          result_2$IE$boot_lower = result_2$IE$asym_lower
+          result_2$IE$boot_upper = result_2$IE$asym_upper
+        }
+        ind = floor(length(result_2$IE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
+        result_2 = list(DE = data.frame(asym_lower = result_2$DE$asym_lower[ind], asym_upper = result_2$DE$asym_upper[ind], boot_lower = result_2$DE$boot_lower[ind], boot_upper = result_2$DE$boot_upper[ind]),
+                        IE = data.frame(asym_lower = result_2$IE$asym_lower[ind], asym_upper = result_2$IE$asym_upper[ind], boot_lower = result_2$IE$boot_lower[ind], boot_upper = result_2$IE$boot_upper[ind]))
+        result_now = list(DE = result_1$DE, IE = result_1$IE, IE2 = result_2$IE)
+      }else{
+        true_DE_now = approx(true_DE$time, true_DE$hazard, xout = result_1$time, rule = 2)$y
+        true_IE_now = approx(true_IE$time, true_IE$hazard, xout = result_1$time, rule = 2)$y
+        result_1$DE = result_1$DE - true_DE_now
+        result_1$IE = result_1$IE - true_IE_now
+        result_now = list(DE = result_1$DE, IE = result_1$IE)
+      }
+      gc()
+      return(list(result_now))
+    }
+    snow::stopCluster(cl)
+    pracma::fprintf('\n')
+
+  }else{
+    result_now = vector(mode = 'list', length = repeat_size)
+    ## fetch basic parameter
+    if(timer){
+      space = 100
+      pracma::fprintf('| bootstrap        20        30        40        50        60        70        80        90    100 |\n')
+      loop_count = 1:repeat_size
+      counter_total = repeat_size
+      cum_bar_num = my_eva_fun(list(1:space, 1:space / space * counter_total), loop_count, rule = '0')
+      bar_num = diff(c(0, cum_bar_num))
+    }
+    i = 1
+    for(i in 1:repeat_size){
+      df1 = generate_df(sample_size, repeat_size = 1, hypo, confounder = F, calibration = F, myseed = i)[[1]]
+      result_1 = CHH2020(df1, get_variance = c('a', 'b'), timer = F, intervention = c(2, 1))
+      ind = floor(length(result_1$DE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
+      result_1 = list(time = result_1$DE$time[ind],
+                      DE = data.frame(asym_lower = result_1$DE$asym_lower[ind], asym_upper = result_1$DE$asym_upper[ind], boot_lower = result_1$DE$boot_lower[ind], boot_upper = result_1$DE$boot_upper[ind]),
+                      IE = data.frame(asym_lower = result_1$IE$asym_lower[ind], asym_upper = result_1$IE$asym_upper[ind], boot_lower = result_1$IE$boot_lower[ind], boot_upper = result_1$IE$boot_upper[ind]))
+
+      if(hypo == 'null'){
+        df2 = generate_df2(sample_size, myseed = i)
+        result_2 = CHH2020(df2, get_variance = c('a', 'b'), timer = F, intervention = c(2, 1))
+        ind = floor(length(result_2$IE$time) * c(0.2, 0.4, 0.5, 0.6, 0.8))
+        result_2 = list(DE = data.frame(asym_lower = result_2$DE$asym_lower[ind], asym_upper = result_2$DE$asym_upper[ind], boot_lower = result_2$DE$boot_lower[ind], boot_upper = result_2$DE$boot_upper[ind]),
+                        IE = data.frame(asym_lower = result_2$IE$asym_lower[ind], asym_upper = result_2$IE$asym_upper[ind], boot_lower = result_2$IE$boot_lower[ind], boot_upper = result_2$IE$boot_upper[ind]))
+        result_now[[i]] = list(DE = result_1$DE, IE = result_1$IE, IE2 = result_2$IE)
+      }else{
+        true_DE_now = approx(true_DE$time, true_DE$hazard, xout = result_1$time, rule = 2)$y
+        true_IE_now = approx(true_IE$time, true_IE$hazard, xout = result_1$time, rule = 2)$y
+        result_1$DE = result_1$DE - true_DE_now
+        result_1$IE = result_1$IE - true_IE_now
+        result_now[[i]] = list(DE = result_1$DE, IE = result_1$IE)
+      }
+      if(timer && bar_num[i] > 0){for(i in 1:bar_num[i]){pracma::fprintf('-')}}
+    }
+    if(timer){pracma::fprintf('\n')}
+  }
+  DE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
+  IE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
+  if(hypo == "null"){IE2_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))}
+
+  for(i in 1:repeat_size){
+    DE_coverage$asym = DE_coverage$asym + ((result_now[[i]]$DE$asym_lower * result_now[[i]]$DE$asym_upper) < 0)
+    DE_coverage$boot = DE_coverage$boot + ((result_now[[i]]$DE$boot_lower * result_now[[i]]$DE$boot_upper) < 0)
+
+    IE_coverage$asym = IE_coverage$asym + ((result_now[[i]]$IE$asym_lower * result_now[[i]]$IE$asym_upper) < 0)
+    IE_coverage$boot = IE_coverage$boot + ((result_now[[i]]$IE$boot_lower * result_now[[i]]$IE$boot_upper) < 0)
+
+    if(hypo == "null"){
+      IE2_coverage$asym = IE2_coverage$asym + ((result_now[[i]]$IE2$asym_lower * result_now[[i]]$IE2$asym_upper) < 0)
+      IE2_coverage$boot = IE2_coverage$boot + ((result_now[[i]]$IE2$boot_lower * result_now[[i]]$IE2$boot_upper) < 0)
+    }
+  }
+  if(hypo == "null"){
+    return(list(DE = DE_coverage/repeat_size, IE1 = IE_coverage/repeat_size, IE2 = IE2_coverage/repeat_size))
+  }else{
+    return(list(DE = DE_coverage/repeat_size, IE = IE_coverage/repeat_size))
+  }
 }
 
 ## simulation
 generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, myseed = 1){
   df_all = vector(mode = 'list', length = repeat_size)
   set.seed(myseed)
-  observed = 0
   alpha1Z = 0.25 * (hypo == 'alter')
   alpha2Z = 0.25 * (hypo == 'alter')
-  intersection = -1.5
+  intersection = -0
 
   alphaX = 1 * confounder
   X = c(rep(0, sample_size/2), rep(1, sample_size/2)) * confounder
   Z = ((X + rnorm(sample_size)) > 0.5) + 1
-  # Z = X + rnorm(sample_size)
   for(counter in 1:repeat_size){
     set.seed(counter + myseed)
 
     T1 = rweibull(sample_size, scale = exp(intersection + alpha1Z * Z + alphaX * X), shape = 1)
-    T2 = 0.7 * T1 + 0.5 * rweibull(sample_size, scale = exp(alpha2Z * Z + alphaX * X), shape = 1)
+    T2 = T1 + 0.5 * rweibull(sample_size, scale = exp(alpha2Z * Z + alphaX * X), shape = 1)
     C = rweibull(sample_size, scale = 2, shape = 5)
 
     d2 = T2 < C
@@ -188,23 +482,41 @@ generate_df = function(sample_size, repeat_size, hypo, confounder, calibration, 
     d1 = T1 < T2
     T1 = pmin(T1, T2)
 
-    observed = observed + sum(d2)
     if(calibration){df_all[[counter]] = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z, X = X)}
     if(!calibration){df_all[[counter]] = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z)}
   }
-  observed = observed/(sample_size * repeat_size)
-  # fprintf('%.1f%% of subjects are censored.\n', (1 - observed) * 100)
   return(df_all)
+}
+generate_df2 = function(sample_size, myseed = 1){
+  set.seed(myseed)
+  Z = c(rep(1, sample_size/2), rep(2, sample_size/2))
+  T1 = runif(sample_size, 0, 2)
+  picked_index = runif(sample_size) < 0.75
+  T1[Z == 2 & picked_index] = runif(sum(Z == 2 & picked_index), 1.5, 2)
+
+  # T1 = rbeta(sample_size, shape1 = 1, shape2 = 2)
+  # T1[Z == 2] = rbeta(sum(Z == 2), shape1 = 2, shape2 = 1)
+
+  T2 = 2 * rbeta(sample_size, shape1 = 2, shape2 = 1)
+  C = rweibull(sample_size, scale = 2, shape = 5)
+
+  d2 = T2 < C
+  T2 = pmin(T2, C)
+  d1 = T1 < T2
+  T1 = pmin(T1, T2)
+
+  df = data.frame(T1 = T1, T2 = T2, d1 = d1, d2 = d2, Z = Z)
+  return(df)
 }
 alternative_z_1_2 = function(hypo, effect, confounder, intervention){
   tstart = 0
-  tend = 5
-  t = seq(tstart, tend, by = 1e-3)
+  tend = 4
+  t = seq(tstart, tend, by = 5e-4)
   diff_t = t[2] - t[1]
   alpha1Z = 0.25 * (hypo == 'alter')
   alpha2Z = 0.25 * (hypo == 'alter')
   alphaX = 1 * confounder * 0.5
-  intersection = -1.5
+  intersection = -0
 
   #### (2, 2)
   z_a = intervention[1]
@@ -243,6 +555,7 @@ downsample_func = function(vec, downsample){
   }
 }
 data_preprocess = function(df, myunit, downsample){
+  set.seed(1)
   ## remove unreasonable columns
   if(sum(is.na(df)) > 0){stop('NA exists.')}
   col_var = apply(as.matrix(df[5:dim(df)[2]]), 2, var) < .Machine$double.eps
@@ -484,8 +797,8 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
   sort_t2 = sort(df$T2, index.return = TRUE)
   rank_t2 = approx(x = c(0, sort_t2$x), y = 0:m, xout = unique_T2, rule = 2, method = 'constant')$y + 1
   sort_exact_t2 = sort(df$T2[df$d2 == 1])
-  rank_exact_t2 = approx(x = c(0, sort_exact_t2), y = 0:length(sort_exact_t2), xout = unique_T2, rule = 2, method = 'constant')$y + 1
-  order_belonged_to = approx(x = rank_exact_t2, y = 1:observed_t2, xout = 1:sum(df$d2), method = 'constant', rule = 2)$y
+  rank_exact_t2 = approx(x = c(0, sort_exact_t2), y = 0:length(sort_exact_t2), xout = unique_T2, ties = 'max', rule = 2, method = 'constant')$y + 1
+  order_belonged_to = approx(x = rank_exact_t2, y = 1:observed_t2, xout = 1:sum(df$d2), ties = 'max', method = 'constant', rule = 2)$y
   exact_time = list(time = sort_exact_t2, order_belonged_to = order_belonged_to, rank_exact_t2 = rank_exact_t2)
 
   ## how "large" is the data
@@ -587,15 +900,17 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
   if(AsymVariance){
     alpha_var_tmp = as.matrix(alpha_var[, 1:n_covariates_cov])
 
-    cum_haz_1_fulltime = approx(x = cox_b1$cum_haz$time, y = cox_b1$cum_haz$cum_haz, xout = unique_T2, method = 'constant', yleft = 0, rule = 2)$y
-    survival1_cov = exp(as.matrix(df_alpha_covariates[, 2:n_covariates]) %*% cox_b1$coeff)
+    if(variance_method == "new"){
+      cum_haz_1_fulltime = approx(x = cox_b1$cum_haz$time, y = cox_b1$cum_haz$cum_haz, xout = unique_T2, method = 'constant', yleft = 0, rule = 2)$y
+      survival1_cov = exp(as.matrix(df_alpha_covariates[, 2:n_covariates]) %*% cox_b1$coeff)
 
-    if(length(cox_b0) > 1){
-      cum_haz_0_fulltime = approx(x = cox_b0$cum_haz$time, y = cox_b0$cum_haz$cum_haz, xout = unique_T2, method = 'constant', yleft = 0, rule = 2)$y
-      survival0_cov = exp(as.matrix(df_alpha_covariates[, 2:n_covariates]) %*% cox_b0$coeff)
-    }else{
-      cum_haz_0_fulltime = rep(0, observed_t2)
-      survival0_cov = rep(1, m)
+      if(length(cox_b0) > 1){
+        cum_haz_0_fulltime = approx(x = cox_b0$cum_haz$time, y = cox_b0$cum_haz$cum_haz, xout = unique_T2, method = 'constant', yleft = 0, rule = 2)$y
+        survival0_cov = exp(as.matrix(df_alpha_covariates[, 2:n_covariates]) %*% cox_b0$coeff)
+      }else{
+        cum_haz_0_fulltime = rep(0, observed_t2)
+        survival0_cov = rep(1, m)
+      }
     }
 
     if(num_of_cores > 1){
@@ -620,8 +935,11 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
         ## fill off-diagonal
         if(counter_i > 1){
           sub_i = df_alpha_covariates[rank_t2[counter_i]:m, ]
-          survival1_cov_now = survival1_cov[rank_t2[counter_i]:m]
-          survival0_cov_now = survival0_cov[rank_t2[counter_i]:m]
+
+          if(variance_method == "new"){
+            survival1_cov_now = survival1_cov[rank_t2[counter_i]:m]
+            survival0_cov_now = survival0_cov[rank_t2[counter_i]:m]
+          }
 
           p2 = as.vector(1 / (1 + exp(-sub_i %*% alpha_mat[, counter_i])))
           sub_i_cov_2 = sub_i %*% alpha_var_tmp[index_now_full, ] # counter_i = cov_2
@@ -631,9 +949,10 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
           index_now_j = 1:n_covariates_cov
           if(rank_t2[counter_i] == m){
             for(counter_j in 1:(counter_i - 1)){
-              surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
-              surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
-
+              if(variance_method == "new"){
+                surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
+                surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
+              }
               p1 = 1/(1 + exp(-as.vector(sub_i %*% alpha_mat[, counter_j])))
 
               if(variance_method == 'new'){
@@ -650,9 +969,10 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
             }
           }else{
             for(counter_j in 1:(counter_i - 1)){
-              surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
-              surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
-
+              if(variance_method == "new"){
+                surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
+                surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
+              }
               p1 = 1/(1 + exp(-as.vector(sub_i %*% alpha_mat[, counter_j])))
 
               if(variance_method == 'new'){
@@ -698,8 +1018,10 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
         ## fill off-diagonal
         if(counter_i > 1){
           sub_i = df_alpha_covariates[rank_t2[counter_i]:m, ]
-          survival1_cov_now = survival1_cov[rank_t2[counter_i]:m]
-          survival0_cov_now = survival0_cov[rank_t2[counter_i]:m]
+          if(variance_method == "new"){
+            survival1_cov_now = survival1_cov[rank_t2[counter_i]:m]
+            survival0_cov_now = survival0_cov[rank_t2[counter_i]:m]
+          }
 
           p2 = as.vector(1 / (1 + exp(-sub_i %*% alpha_mat[, counter_i])))
           sub_i_cov_2 = sub_i %*% alpha_var_tmp[index_now_full, ] # counter_i = cov_2
@@ -710,12 +1032,13 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
           alpha_cov_tmp = matrix(0, (counter_i - 1) * n_covariates_cov, n_covariates_cov)
           if(rank_t2[counter_i] == m){
             for(counter_j in 1:(counter_i - 1)){
-              surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
-              surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
-
+              if(variance_method == "new"){
+                surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
+                surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
+              }
               p1 = 1/(1 + exp(-as.vector(sub_i %*% alpha_mat[, counter_j])))
 
-              if(variance_method == 'new'){
+              if(variance_method == "new"){
                 s1p1 = surv_n1_1 * p1
                 prob = s1p1 * (1 - p2 * (s1p1 + surv_n1_0 * (1 - p1)))
               }else{
@@ -729,12 +1052,13 @@ estimate_alpha = function(df, cal_level, cox_b0, cox_b1, unique_T2, get_variance
             }
           }else{
             for(counter_j in 1:(counter_i - 1)){
-              surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
-              surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
-
+              if(variance_method == "new"){
+                surv_n1_1 = exp(-survival1_cov_now * (cum_haz_1_fulltime[counter_i] - cum_haz_1_fulltime[counter_j]))
+                surv_n1_0 = exp(-survival0_cov_now * (cum_haz_0_fulltime[counter_i] - cum_haz_0_fulltime[counter_j]))
+              }
               p1 = 1/(1 + exp(-as.vector(sub_i %*% alpha_mat[, counter_j])))
 
-              if(variance_method == 'new'){
+              if(variance_method == "new"){
                 s1p1 = surv_n1_1 * p1
                 prob = s1p1 * (1 - p2 * (s1p1 + surv_n1_0 * (1 - p1)))
               }else{
@@ -890,7 +1214,7 @@ inv_coxinformation = function(df_, coeff_, cum_haz_){
   inv_coxinf$coxinf = coxinf
   return(inv_coxinf)
 }
-get_variance = function(get_DE, get_IE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1, b0_time, b1_time){
+compute_variance = function(get_DE, get_IE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1, b0_time, b1_time){
   if(get_DE){za_iv1 = intervention[1]; zb_iv1 = intervention[2]; za_iv2 = intervention[2]; zb_iv2 = intervention[2];}
   if(get_IE){za_iv1 = intervention[1]; zb_iv1 = intervention[1]; za_iv2 = intervention[1]; zb_iv2 = intervention[2];}
 
@@ -1283,7 +1607,7 @@ estimate_effect = function(df, effect, intervention, cal_level, sen_ana, get_var
     result$DE$effect = counterfactual_hazard
     result$DE$time = estimation_alpha$time
     if(AsymVariance){
-      result$DE$variance = get_variance(get_DE = TRUE, get_IE = FALSE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1, b0_time, b1_time)
+      result$DE$variance = compute_variance(get_DE = TRUE, get_IE = FALSE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1, b0_time, b1_time)
       result$DE$asym_lower = result$DE$effect - 1.96 * sqrt(result$DE$variance$variance)
       result$DE$asym_upper = result$DE$effect + 1.96 * sqrt(result$DE$variance$variance)
     }
@@ -1302,7 +1626,7 @@ estimate_effect = function(df, effect, intervention, cal_level, sen_ana, get_var
     result$IE$effect = counterfactual_hazard
     result$IE$time = estimation_alpha$time
     if(AsymVariance){
-      result$IE$variance = get_variance(get_DE = FALSE, get_IE = TRUE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1)
+      result$IE$variance = compute_variance(get_DE = FALSE, get_IE = TRUE, intervention, cal_level, estimation_alpha, cox_b0, cox_b1)
       result$IE$asym_lower = result$IE$effect - 1.96 * sqrt(result$IE$variance$variance)
       result$IE$asym_upper = result$IE$effect + 1.96 * sqrt(result$IE$variance$variance)
     }
@@ -1322,15 +1646,13 @@ estimate_effect = function(df, effect, intervention, cal_level, sen_ana, get_var
 
 ## plot function
 plot_poly = function(y1, y2, x, color, density = NULL, angle = NULL){
-  yy1 = c(rep(y1, 2)); yy1 = yy1[1:(length(yy1) - 1)]
-  yy2 = c(rep(y2, 2)); yy2 = rev(yy2[1:(length(yy2)) - 1])
-  xx = rep(x, 2); xx = xx[2:length(xx)]
+  # y1 = df_asymp_DE$lower; y2 = df_asymp_DE$upper; x = df_asymp_DE$time; color = "dodgerblue"
+  yy1 = c(rep(y1, each = 2)); yy1 = yy1[1:(length(yy1) - 1)]
+  yy2 = c(rep(y2, each = 2)); yy2 = rev(yy2[1:(length(yy2)) - 1])
+  xx = rep(x, each = 2); xx = xx[2:length(xx)]
   polygon(y = c(yy1, yy2), x = c(xx, rev(xx)), density = density, col = adjustcolor(color, alpha.f = 0.3), border = color, angle = angle)
 }
-plot_CHH2020 = function(result, my_eva_time){
-  width = 250
-  height = 250
-
+plot_CHH2020 = function(result){
   result$IE$time = result$IE$time / 365.25
   result$DE$time = result$DE$time / 365.25
   ylim_cumh_upper = max(result$IE$boot_upper, result$DE$boot_upper, result$IE$asym_upper, result$DE$asym_upper)
@@ -1342,7 +1664,7 @@ plot_CHH2020 = function(result, my_eva_time){
   ## plot default
   cex.lab = 1.1
   cex.main = 1.1
-  cex.axis = 0.85
+  cex.axis = 1
   las = 1
   xlab = 'Time (years)'
   ylab_rho = expression(paste(rho[DE](t), ',', rho[IE](t)))
@@ -1352,54 +1674,103 @@ plot_CHH2020 = function(result, my_eva_time){
   df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$boot_upper), lower = exp(-result$IE$boot_lower))
   df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$boot_upper), lower = exp(-result$DE$boot_lower))
 
-  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_boot_rho.png", sep = ''), width = width, height = height)
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Survival probability ratio \n Bootstrap CI, H", keyword, "V", sep = ''), xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Survival probability ratio \n Bootstrap CI", xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
   lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
-  legend("bottomleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
+  legend("bottomleft", legend = c("Indirect effct", "Direct effect"), fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
   plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
   plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
   abline(h = 1, col = "grey")
-  dev.off()
-
 
   ## bootstrap, hazard
   df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$boot_upper, lower = result$IE$boot_lower)
   df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$boot_upper, lower = result$DE$boot_lower)
 
-  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_boot_cumhaz.png", sep = ''), width = width, height = height)
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Cumulative hazard difference \n Bootstrap CI, H", keyword, "V", sep = ''),  xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Cumulative hazard difference \n Bootstrap CI",  xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
   lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
   legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
   plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
   plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
   abline(h = 0, col = "grey")
-  dev.off()
 
 
   ## asymptotic, surv
   df_asymp_IE = data.frame(cumhaz = exp(-result$IE$effect), time = result$IE$time, upper = exp(-result$IE$asym_upper), lower = exp(-result$IE$asym_lower))
   df_asymp_DE = data.frame(cumhaz = exp(-result$DE$effect), time = result$DE$time, upper = exp(-result$DE$asym_upper), lower = exp(-result$DE$asym_lower))
 
-  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_asymp_rho.png", sep = ''), width = width, height = height)
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Survival probability ratio \n Asymptotic CI, H", keyword, "V", sep = ''),  xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_surv_lower, ylim_surv_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Survival probability ratio \n Asymptotic CI",  xlab = xlab, ylab = ylab_rho, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
   lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
   legend("bottomleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
   plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
   plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
   abline(h = 1, col = "grey")
-  dev.off()
 
 
   ## asymptotic, hazard
   df_asymp_IE = data.frame(cumhaz = result$IE$effect, time = result$IE$time, upper = result$IE$asym_upper, lower = result$IE$asym_lower)
   df_asymp_DE = data.frame(cumhaz = result$DE$effect, time = result$DE$time, upper = result$DE$asym_upper, lower = result$DE$asym_lower)
 
-  png(file = paste("/home/js/semiparametric_CMA_of_semicompeting_risks/result/", data, "/data", keyword, "_asymp_cumhaz.png", sep = ''), width = width, height = height)
-  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = paste("Cumulative hazard difference \n Asymptotic CI, H", keyword, "V", sep = ''), xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
+  plot(cumhaz ~ time, data = df_asymp_IE, type = "s", lwd = 2, ylim = c(ylim_cumh_lower, ylim_cumh_upper), col = adjustcolor("orange", alpha.f = 0.50), main = "Cumulative hazard difference \n Asymptotic CI", xlab = xlab, ylab = ylab_Del, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis, las = las)
   lines(cumhaz ~ time, data = df_asymp_DE, type = "s", lwd = 2, col = adjustcolor("dodgerblue", alpha.f = 0.50))
   legend("topleft", legend = c("Indirect effct", "Direct effect"), cex = 0.85, fill = c(adjustcolor("orange", alpha.f = 0.10), adjustcolor("dodgerblue", alpha.f = 0.10)), bty = "n", border = c(adjustcolor("orange", alpha.f = 10), adjustcolor("dodgerblue", alpha.f = 10)))
   plot_poly(df_asymp_DE$lower, df_asymp_DE$upper, df_asymp_DE$time, "dodgerblue", NULL)
   plot_poly(df_asymp_IE$lower, df_asymp_IE$upper, df_asymp_IE$time, "orange", NULL)
   abline(h = 0, col = "grey")
-  dev.off()
+  return(TRUE)
 }
+plot_unbiasedness = function(result_, true_, ylim, hypo, effect, confounder, calibration){
+  # result_ = result_IE$FF; true_ = true_IE; ylim = min_max_IE; effect = 'IE'; confounder = F; calibration = F;
+  # result_ = result_DE$FF; true_ = true_DE; effect = "DE"; calibration = F; ylim = min_max_DE;
+  cex.lab = 2
+  cex.main = 2.5
+  cex.axis = 1.5
+
+  if(confounder == FALSE){
+    main = paste("No confounding \n", effect, ', ', hypo, sep = '')
+  }else{
+    if(calibration == FALSE){
+      main = paste("Confounding, unadjusted \n", effect, ', ', hypo, sep = '')
+    }else{
+      main = paste("Confounding, adjusted \n", effect, ', ', hypo, sep = '')
+    }
+  }
+  xlab = "Time"
+  if(effect == "DE"){
+    ylab = expression(Delta[DE](t))
+  }else{
+    ylab = expression(Delta[IE](t))
+  }
+
+  time_axis = seq(0, 2.5, 0.01)
+  index_all = NULL
+  ave_DE = rep(0, length(time_axis))
+  plot(NULL, xlim = c(0, 3), ylim = ylim, xlab = xlab, ylab = '', main = main, cex.lab = cex.lab, cex.main = cex.main, cex.axis = cex.axis)
+  title(ylab = ylab, line = 2.2, cex.lab = cex.lab)
+  for(i in 1:length(result_)){
+    ave_DE = ave_DE + approx(result_[[i]]$time, result_[[i]]$effect, xout = time_axis, method = 'constant', rule = 2)$y
+    lines(result_[[i]]$time, result_[[i]]$effect, col = 'grey', lwd = .5, type = 's')
+    index_all = c(index_all, floor(result_[[i]]$sick * 1000))
+  }
+  index_all = sort(index_all)
+  time_slot = approx(x = index_all, y = 1:length(index_all), xout = unique(index_all), ties = "max", rule = 2, method = "constant")
+  time_slot$y = c(time_slot$y[1], diff(time_slot$y))
+
+  small_line = c(ylim[1], ylim[1] + (ylim[2] - ylim[1]) / 15)
+  for(i in 1:length(time_slot$x)){
+    lines(rep(0.001 * i, 2), small_line, lwd = time_slot$y[i]/max(time_slot$y))
+  }
+  legend(x = 0, y = ylim[1] + 4 * (ylim[2] - ylim[1]) / 15, legend = c("Average", "True Value"), cex = 1.5, lty = c(1, 2))
+
+  ave_DE = ave_DE/length(result_)
+  lines(time_axis, ave_DE, type = 's', lty = 1, lwd = 2)
+  lines(true_$time, true_$hazard, type = 's', lty = 2, lwd = 2)
+}
+
+
+
+
+
+
+
+
+
+

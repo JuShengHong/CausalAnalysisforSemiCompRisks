@@ -12,12 +12,12 @@ CHH2020(
   myunit = "raw",
   downsample = 1,
   sen_ana = FALSE,
-  GetVariance = c("asymptotic"),
+  get_variance = c("asymptotic"),
   boot_times = 1000,
   timer = TRUE,
   num_of_cores = 1,
   plot_result = FALSE,
-  variance_method = "old",
+  variance_method = "new",
   threshold = 1e-12
 )
 }
@@ -36,7 +36,7 @@ CHH2020(
 
 \item{sen_ana}{doing sensitivity analysis or not. Default is \code{FALSE}.}
 
-\item{GetVariance}{the method to compute the variance. Choices are \code{"a"} or \code{"b"}. Default is \code{"a"}.}
+\item{get_variance}{the method to compute the variance. Choices are \code{"a"} or \code{"b"}. Default is \code{"a"}.}
 
 \item{boot_times}{the times of bootstrap. Default is \code{1000}.}
 
