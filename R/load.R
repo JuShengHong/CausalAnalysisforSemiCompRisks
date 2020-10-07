@@ -156,7 +156,7 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
     return(NULL)
   })
   }
-  if(sen_ana && plot_result){tryCatch(plot_sen_ana(result), error = function(msg){
+  if(sen_ana){tryCatch(plot_sen_ana(result), error = function(msg){
     print('Something wrong with the plot function. Please tell me.')
     return(NULL)
   })
@@ -1703,8 +1703,13 @@ plot_poly = function(y1, y2, x, color, density = NULL, angle = NULL){
 plot_CHH2020 = function(result){
   result$IE$time = result$IE$time / 365.25
   result$DE$time = result$DE$time / 365.25
-  ylim_cumh_upper = max(result$IE$boot_upper, result$DE$boot_upper, result$IE$asym_upper, result$DE$asym_upper)
-  ylim_cumh_lower = min(result$IE$boot_lower, result$DE$boot_lower, result$IE$asym_lower, result$DE$asym_lower)
+  if(!is.null(result$DE$boot_upper)){
+    ylim_cumh_upper = max(result$IE$boot_upper, result$DE$boot_upper, result$IE$asym_upper, result$DE$asym_upper)
+    ylim_cumh_lower = min(result$IE$boot_lower, result$DE$boot_lower, result$IE$asym_lower, result$DE$asym_lower)
+  }else{
+    ylim_cumh_upper = max(result$IE$asym_upper, result$DE$asym_upper)
+    ylim_cumh_lower = min(result$IE$asym_lower, result$DE$asym_lower)
+  }
 
   ylim_surv_lower = exp(-ylim_cumh_upper)
   ylim_surv_upper = exp(-ylim_cumh_lower)
