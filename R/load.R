@@ -171,12 +171,12 @@ CHH2020 = function(df, effect = c('DE', 'IE'), intervention = c(1, 0), cal_level
 #' @param timer will show the progress. Default is \code{TRUE}.
 #' @return \code{CHH2020} returns 6 plots if \code{simulation_type == 1}; a data frame containing coverage if \code{simulation_type == 2}.
 #' @export
-simulation = function(simulation_type, hypo, sample_size = 1000, repeat_size = 1000, num_of_cores = 1, timer = TRUE){
+simulation = function(simulation_type, hypo, sample_size = 1000, repeat_size = 1000, num_of_cores = 1, timer = TRUE, get_variance = c('a', 'b')){
   if(simulation_type == 1){
     plot_successful = unbiasedness(hypo = hypo, sample_size = 1000, repeat_size = repeat_size, num_of_cores = num_of_cores, timer = timer)
     return(NULL)
   }else if(simulation_type == 2){
-    coverage_rate = coverage(hypo = hypo, sample_size = sample_size, repeat_size = repeat_size, num_of_cores = num_of_cores, timer = timer)
+    coverage_rate = coverage(hypo = hypo, sample_size = sample_size, repeat_size = repeat_size, num_of_cores = num_of_cores, timer = timer, get_variance = get_variance)
     return(coverage_rate)
   }else{
     warning("Unreconginized simulation type.")
@@ -436,20 +436,28 @@ coverage = function(hypo, sample_size, repeat_size, num_of_cores, timer = TRUE, 
     }
     if(timer){pracma::fprintf('\n')}
   }
-  DE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
-  IE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
-  if(hypo == "null"){IE2_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))}
+  BootVariance = sum(c('b', 'B', 'boot', 'bootstrap', 'bootstrapping', 'Boot', 'Bootstrap', 'Bootstrapping') %in% get_variance) > 0
+
+  if(BootVariance){
+    DE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
+    IE_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))
+    if(hypo == "null"){IE2_coverage = data.frame(asym = rep(0, 5), boot = rep(0, 5))}
+  }else{
+    DE_coverage = data.frame(asym = rep(0, 5))
+    IE_coverage = data.frame(asym = rep(0, 5))
+    if(hypo == "null"){IE2_coverage = data.frame(asym = rep(0, 5))}
+  }
 
   for(i in 1:repeat_size){
     DE_coverage$asym = DE_coverage$asym + ((result_now[[i]]$DE$asym_lower * result_now[[i]]$DE$asym_upper) < 0)
-    DE_coverage$boot = DE_coverage$boot + ((result_now[[i]]$DE$boot_lower * result_now[[i]]$DE$boot_upper) < 0)
+    if(BootVariance){DE_coverage$boot = DE_coverage$boot + ((result_now[[i]]$DE$boot_lower * result_now[[i]]$DE$boot_upper) < 0)}
 
     IE_coverage$asym = IE_coverage$asym + ((result_now[[i]]$IE$asym_lower * result_now[[i]]$IE$asym_upper) < 0)
-    IE_coverage$boot = IE_coverage$boot + ((result_now[[i]]$IE$boot_lower * result_now[[i]]$IE$boot_upper) < 0)
+    if(BootVariance){IE_coverage$boot = IE_coverage$boot + ((result_now[[i]]$IE$boot_lower * result_now[[i]]$IE$boot_upper) < 0)}
 
     if(hypo == "null"){
       IE2_coverage$asym = IE2_coverage$asym + ((result_now[[i]]$IE2$asym_lower * result_now[[i]]$IE2$asym_upper) < 0)
-      IE2_coverage$boot = IE2_coverage$boot + ((result_now[[i]]$IE2$boot_lower * result_now[[i]]$IE2$boot_upper) < 0)
+      if(BootVariance){IE2_coverage$boot = IE2_coverage$boot + ((result_now[[i]]$IE2$boot_lower * result_now[[i]]$IE2$boot_upper) < 0)}
     }
   }
   if(hypo == "null"){
@@ -1742,8 +1750,6 @@ plot_CHH2020 = function(result){
   return(TRUE)
 }
 plot_unbiasedness = function(result_, true_, ylim, hypo, effect, confounder, calibration){
-  # result_ = result_IE$FF; true_ = true_IE; ylim = min_max_IE; effect = 'IE'; confounder = F; calibration = F;
-  # result_ = result_DE$FF; true_ = true_DE; effect = "DE"; calibration = F; ylim = min_max_DE;
   cex.lab = 2
   cex.main = 2.5
   cex.axis = 1.5
