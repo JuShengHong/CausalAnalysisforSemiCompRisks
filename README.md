@@ -23,6 +23,7 @@ simulation(2, 'alter', sample_size = 1000, repeat_size = 100, get_variance = 'as
 ```
 ### REVEAL-HBV
 ```r
+library(CausalAnalysisforSemiCompRisks)
 # The result of analyzing the REVEAL-HBV dataset as discussed in Section 7 in our paper.
 # We set get_variance as c('aymptotic', 'bootstrap') in our paper.
 result = CASCR(REVEAL_HBV, plot_result = T, get_variance = 'asymptotic')
