@@ -7,6 +7,7 @@ devtools::install_github("JuShengHong/CausalAnalysisforSemiCompRisks")
 ```
 
 ## Usage
+### simulation
 ```r
 library(CausalAnalysisforSemiCompRisks)
 # The result of the unbiasedness as presented in Figure 1 in our paper. We repeat it 1,000
@@ -19,7 +20,9 @@ simulation(1, hypo = 'alter', repeat_size = 100)
 # This, however, spend plenty of time.
 simulation(2, 'null', sample_size = 1000, repeat_size = 100, get_variance = 'asymptotic')
 simulation(2, 'alter', sample_size = 1000, repeat_size = 100, get_variance = 'asymptotic')
-
+```
+### REVEAL-HBV
+```r
 # The result of analyzing the REVEAL-HBV dataset as discussed in Section 7 in our paper.
 # We set get_variance as c('aymptotic', 'bootstrap') in our paper.
 result = CASCR(REVEAL_HBV, plot_result = T, get_variance = 'asymptotic')
